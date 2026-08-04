@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Money Tracker</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            max-width: 550px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 1.5rem;
+        }
+        h1, h2, h3 { margin-top: 0; color: #2c3e50; }
+        
+        /* Total Display Box */
+        .balance-box {
+            text-align: center;
+            background: #e8f4f8;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            border: 1px solid #d1e8f0;
+        }
+        .balance-box p { margin: 0 0 5px 0; color: #555; font-weight: bold; }
+        .balance-box h2 { margin: 0; font-size: 2.5rem; color: #2980b9; }
+
+        /* Form Layout */
+        .form-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .form-group-column {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 1rem;
+        }
+        input, select, button {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        input[type="text"], input[type="date"] { flex: 2; }
+        input[type="number"] { flex: 1; }
+        
+        button {
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .btn-blue { background: #2980b9; width: 100%; }
+        .btn-blue:hover { background: #2471a3; }
+        .btn-green { background: #27ae60; width: 100%; }
+        .btn-green:hover { background: #219653; }
+
+        /* Ledger / List */
+        .ledger-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 10px;
+            border-bottom: 1px solid #eee;
+            background: white;
+            transition: background 0.2s;
+        }
+        .ledger-item:last-child { border-bottom: none; }
+        .ledger-item.over { border-top: 2px dashed #2980b9; } /* Drag and drop visual */
+        
+        .drag-handle {
+            cursor: grab;
+            color: #bdc3c7;
+            padding-right: 15px;
+            font-size: 1.2rem;
+            user-select: none;
+        }
+        .drag-handle:active { cursor: grabbing; }
+
+        .item-left { flex-grow: 1; display: flex; flex-direction: column; }
+        .item-desc { font-weight: 500; }
+        .item-date { font-size: 0.8em; color: #7f8c8d; margin-top: 2px; }
+        
+        .item-right { text-align: right; margin-right: 15px; min-width: 80px; }
+        .item-amount { font-weight: bold; font-size: 1.1em; }
+        .running-total { font-size: 0.85em; color: #95a5a6; margin-top: 2px; }
+
+        .item-actions { display: flex; gap: 5px; }
+        .action-btn { 
+            background: #e0e4e8; 
+            color: #333; 
+            padding: 6px 8px; 
+            border-radius: 4px; 
+            font-size: 0.9rem;
+        }
+        .action-btn:hover { background: #cbd0d5; }
+
+        .expense { color: #e74c3c; }
+        .income { color: #27ae60; }
+        
+        .empty-state { text-align: center; color: #95a5a6; font-style: italic; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 1.5rem 0; }
+    </style>
+</head>
+<body>
+
+    <h1>Money Tracker</h1>
+
+    <div class="balance-box">
+        <p>Current Total</p>
+        <h2 id="displayTotal">£0.00</h2>
+    </div>
+
+    <div class="card">
+        <h3>1. Set Current Amount</h3>
+        <form id="startForm">
+            <div class="form-group">
+                <input type="number" id="startAmount" placeholder="Enter starting £" step="0.01" required>
+                <button type="submit" class="btn-blue">Set Starting Total</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card" id="formCard">
+        <h3 id="formTitle">2. Add Income or Expense</h3>
+        <form id="transactionForm">
+            <div class="form-group-column">
+                <div class="form-group">
+                    <input type="text" id="desc" placeholder="Reference (optional)">
+                    <input type="number" id="amount" placeholder="Amount (£)" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <input type="date" id="date">
+                    <select id="type">
+                        <option value="expense">Expense (-)</option>
+                        <option value="income">Income (+)</option>
+                    </select>
+                </div>
+                <button type="submit" id="submitBtn" class="btn-green">Add to Tracker</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Tracker History</h3>
+        <div id="ledgerList">
+            <div class="empty-state">No transactions added yet.</div>
+        </div>
+    </div>
+
+    <script>
+        // Load existing data from the browser, or start fresh
+        let transactions = JSON.parse(localStorage.getItem('myBudgetTracker')) || [];
+        let editIndex = -1; // Keeps track of which item we are currently editing
+
+        // Formatting currency
+        const formatMoney = (amount) => "£" + Math.abs(amount).toFixed(2);
+
+        // Save to browser storage
+        const saveData = () => localStorage.setItem('myBudgetTracker', JSON.stringify(transactions));
+
+        // DOM Elements
+        const displayTotal = document.getElementById('displayTotal');
+        const startForm = document.getElementById('startForm');
+        const transactionForm = document.getElementById('transactionForm');
+        const ledgerList = document.getElementById('ledgerList');
+        const submitBtn = document.getElementById('submitBtn');
+        const formTitle = document.getElementById('formTitle');
+
+        // Initial Load
+        updateUI();
+
+        // 1. Handle Setting Starting Balance
+        startForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if(transactions.length > 0 && !confirm("This will clear your current tracker and start over. Continue?")) return;
+
+            const startAmount = parseFloat(document.getElementById('startAmount').value);
+            
+            transactions = [{
+                desc: "Starting Balance",
+                amount: startAmount,
+                type: "income",
+                date: ""
+            }];
+            
+            document.getElementById('startAmount').value = '';
+            saveData();
+            updateUI();
+        });
+
+        // 2. Handle Adding/Editing Transactions
+        transactionForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const desc = document.getElementById('desc').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const type = document.getElementById('type').value;
+            const date = document.getElementById('date').value;
+
+            if (editIndex > -1) {
+                // We are updating an existing item
+                transactions[editIndex] = { desc, amount, type, date };
+                editIndex = -1;
+                submitBtn.textContent = 'Add to Tracker';
+                formTitle.textContent = '2. Add Income or Expense';
+            } else {
+                // We are adding a new item
+                transactions.push({ desc, amount, type, date });
+            }
+            
+            transactionForm.reset();
+            saveData();
+            updateUI();
+        });
+
+        // Edit Function
+        window.editItem = function(index) {
+            const t = transactions[index];
+            document.getElementById('desc').value = t.desc || '';
+            document.getElementById('amount').value = t.amount;
+            document.getElementById('type').value = t.type;
+            document.getElementById('date').value = t.date || '';
+            
+            editIndex = index;
+            submitBtn.textContent = 'Update Transaction';
+            formTitle.textContent = 'Editing Transaction';
+            document.getElementById('formCard').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        // Delete Function
+        window.deleteItem = function(index) {
+            if (confirm("Delete this item?")) {
+                transactions.splice(index, 1);
+                saveData();
+                updateUI();
+            }
+        };
+
+        // --- Drag and Drop Functions ---
+        let dragStartIndex;
+
+        function dragStart(e) {
+            dragStartIndex = +this.dataset.index;
+            e.dataTransfer.effectAllowed = 'move';
+        }
+        function dragOver(e) { e.preventDefault(); }
+        function dragEnter() { this.classList.add('over'); }
+        function dragLeave() { this.classList.remove('over'); }
+        
+        function dragDrop(e) {
+            e.stopPropagation();
+            const dragEndIndex = +this.dataset.index;
+            this.classList.remove('over');
+            
+            // Move the item in the array
+            const itemToMove = transactions.splice(dragStartIndex, 1)[0];
+            transactions.splice(dragEndIndex, 0, itemToMove);
+            
+            saveData();
+            updateUI();
+        }
+
+        // 3. Update the Screen
+        function updateUI() {
+            ledgerList.innerHTML = '';
+            let runningTotal = 0;
+
+            if (transactions.length === 0) {
+                ledgerList.innerHTML = '<div class="empty-state">No transactions added yet.</div>';
+                displayTotal.textContent = "£0.00";
+                displayTotal.style.color = '#2980b9';
+                return;
+            }
+
+            // Build the list
+            transactions.forEach((t, index) => {
+                if (t.type === 'income') runningTotal += t.amount;
+                else runningTotal -= t.amount;
+
+                // Format date only if one was entered
+                let dateString = '';
+                if (t.date) {
+                    const dateObj = new Date(t.date);
+                    dateString = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+                }
+
+                const sign = t.type === 'income' ? '+' : '-';
+                const colorClass = t.type === 'income' ? 'income' : 'expense';
+                const displayName = t.desc ? t.desc : '<em>No reference</em>';
+
+                const div = document.createElement('div');
+                div.className = 'ledger-item';
+                div.draggable = true;
+                div.dataset.index = index;
+
+                div.innerHTML = `
+                    <div class="drag-handle" title="Drag to reorder">☰</div>
+                    <div class="item-left">
+                        <span class="item-desc">${displayName}</span>
+                        <span class="item-date">${dateString}</span>
+                    </div>
+                    <div class="item-right">
+                        <div class="item-amount ${colorClass}">${sign}${formatMoney(t.amount)}</div>
+                        <div class="running-total">= ${formatMoney(runningTotal)}</div>
+                    </div>
+                    <div class="item-actions">
+                        <button onclick="editItem(${index})" class="action-btn" title="Edit">✎</button>
+                        <button onclick="deleteItem(${index})" class="action-btn" title="Delete">✖</button>
+                    </div>
+                `;
+
+                // Add drag and drop event listeners
+                div.addEventListener('dragstart', dragStart);
+                div.addEventListener('dragover', dragOver);
+                div.addEventListener('drop', dragDrop);
+                div.addEventListener('dragenter', dragEnter);
+                div.addEventListener('dragleave', dragLeave);
+
+                ledgerList.appendChild(div);
+            });
+
+            // Update big number
+            displayTotal.textContent = (runningTotal < 0 ? "-" : "") + formatMoney(runningTotal);
+            displayTotal.style.color = runningTotal < 0 ? '#e74c3c' : '#2980b9';
+        }
+    </script>
+</body>
+</html>
