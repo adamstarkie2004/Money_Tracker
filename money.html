@@ -266,9 +266,9 @@
             const dragEndIndex = +this.dataset.index;
             this.classList.remove('over');
             
-            // Move the item in the array
             const itemToMove = transactions.splice(dragStartIndex, 1)[0];
-            transactions.splice(dragEndIndex, 0, itemToMove);
+            const insertIndex = dragStartIndex < dragEndIndex ? dragEndIndex - 1: dragEndIndex;
+            transactions.splice(insertIndex, 0, itemToMove);
             
             saveData();
             updateUI();
