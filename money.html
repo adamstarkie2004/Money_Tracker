@@ -167,7 +167,7 @@
         let editIndex = -1; // Keeps track of which item we are currently editing
 
         // Formatting currency
-        const formatMoney = (amount) => "£" + Math.abs(amount).toFixed(2);
+        const formatMoney = (amount) => "£" + amount.toFixed(2);
 
         // Save to browser storage
         const saveData = () => localStorage.setItem('myBudgetTracker', JSON.stringify(transactions));
