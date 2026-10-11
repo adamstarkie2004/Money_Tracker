@@ -251,25 +251,58 @@
         };
 
         // --- Drag and Drop Functions ---
-        let dragStartIndex;
+        let dragStartIndex = null;
+
+        function wouldMove(targetIndex) {
+            return targetIndex !== dragStartIndex && targetIndex !== dragStartIndex + 1;
+        }
+
+        function clearOver() {
+            ledgerList.querySelectorAll('.ledger-item.over')
+                    .forEach(el => el.classList.remove('over'));
+        }
 
         function dragStart(e) {
             dragStartIndex = +this.dataset.index;
             e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', '');
         }
-        function dragOver(e) { e.preventDefault(); }
-        function dragEnter() { this.classList.add('over'); }
-        function dragLeave() { this.classList.remove('over'); }
-        
+
+        function dragOver(e) {
+            e.preventDefault();
+            const targetIndex = +this.dataset.index;
+
+            if (dragStartIndex !== null && wouldMove(targetIndex)) {
+                if (!this.classList.contains('over')) {
+                    clearOver();                 
+                    this.classList.add('over');
+                }
+            } else {
+                this.classList.remove('over');   
+            }
+        }
+
+        function dragLeave(e) {
+            if (!this.contains(e.relatedTarget)) this.classList.remove('over');
+        }
+
+        function dragEnd() {
+            clearOver();         
+            dragStartIndex = null;
+        }
+
         function dragDrop(e) {
+            e.preventDefault();
             e.stopPropagation();
             const dragEndIndex = +this.dataset.index;
-            this.classList.remove('over');
-            
+            clearOver();
+
+            if (dragStartIndex === null || !wouldMove(dragEndIndex)) return; 
+
             const itemToMove = transactions.splice(dragStartIndex, 1)[0];
-            const insertIndex = dragStartIndex < dragEndIndex ? dragEndIndex - 1: dragEndIndex;
+            const insertIndex = dragStartIndex < dragEndIndex ? dragEndIndex - 1 : dragEndIndex;
             transactions.splice(insertIndex, 0, itemToMove);
-            
+
             saveData();
             updateUI();
         }
@@ -326,9 +359,9 @@
                 // Add drag and drop event listeners
                 div.addEventListener('dragstart', dragStart);
                 div.addEventListener('dragover', dragOver);
-                div.addEventListener('drop', dragDrop);
-                div.addEventListener('dragenter', dragEnter);
                 div.addEventListener('dragleave', dragLeave);
+                div.addEventListener('drop', dragDrop);
+                div.addEventListener('dragend', dragEnd);
 
                 ledgerList.appendChild(div);
             });
