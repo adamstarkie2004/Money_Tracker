@@ -5,34 +5,102 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Money Tracker</title>
     <style>
+        /* Colours - light mode */
+        :root {
+            --page-bg: #f4f4f9;
+            --text: #333;
+            --heading: #2c3e50;
+            --card-bg: #ffffff;
+            --card-shadow: rgba(0,0,0,0.05);
+            --muted: #7f8c8d;
+            --faint: #95a5a6;
+            --line: #eee;
+            --input-bg: #ffffff;
+            --input-border: #ccc;
+            --accent: #2980b9;
+            --accent-hover: #2471a3;
+            --balance-bg: #e8f4f8;
+            --balance-border: #d1e8f0;
+            --balance-label: #555;
+            --handle: #bdc3c7;
+            --action-bg: #e0e4e8;
+            --action-bg-hover: #cbd0d5;
+            --expense: #e74c3c;
+            --income: #27ae60;
+        }
+        /* Colours - dark mode */
+        body.dark {
+            color-scheme: dark; /* makes the date picker and dropdown dark too */
+            --page-bg: #15171c;
+            --text: #e4e6eb;
+            --heading: #f0f2f5;
+            --card-bg: #1f2229;
+            --card-shadow: rgba(0,0,0,0.4);
+            --muted: #9aa3ad;
+            --faint: #7f8893;
+            --line: #2e323b;
+            --input-bg: #15171c;
+            --input-border: #444a55;
+            --accent: #4aa3df;
+            --accent-hover: #3b8ec6;
+            --balance-bg: #1b2a36;
+            --balance-border: #27414f;
+            --balance-label: #b0b8c1;
+            --handle: #5c6470;
+            --action-bg: #343a45;
+            --action-bg-hover: #434b58;
+            --expense: #ff6b5b;
+            --income: #2ecc71;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f4f4f9;
-            color: #333;
+            background-color: var(--page-bg);
+            color: var(--text);
             max-width: 550px;
             margin: 2rem auto;
             padding: 0 1rem;
+            transition: background-color 0.2s, color 0.2s;
         }
         .card {
-            background: white;
+            background: var(--card-bg);
             padding: 1.5rem;
             border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 6px var(--card-shadow);
             margin-bottom: 1.5rem;
         }
-        h1, h2, h3 { margin-top: 0; color: #2c3e50; }
+        h1, h2, h3 { margin-top: 0; color: var(--heading); }
+
+        /* Page header with dark mode toggle */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 1.3rem;
+        }
+        .page-header h1 { margin: 0; }
+        .theme-toggle {
+            background: var(--action-bg);
+            color: var(--text);
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        .theme-toggle:hover { background: var(--action-bg-hover); }
 
         /* Total Display Box */
         .balance-box {
             text-align: center;
-            background: #e8f4f8;
+            background: var(--balance-bg);
             padding: 1.5rem;
             border-radius: 8px;
             margin-bottom: 1.5rem;
-            border: 1px solid #d1e8f0;
+            border: 1px solid var(--balance-border);
         }
-        .balance-box p { margin: 0 0 5px 0; color: #555; font-weight: bold; }
-        .balance-box h2 { margin: 0; font-size: 2.5rem; color: #2980b9; }
+        .balance-box p { margin: 0 0 5px 0; color: var(--balance-label); font-weight: bold; }
+        .balance-box h2 { margin: 0; font-size: 2.5rem; color: var(--accent); }
+        .balance-box h2.negative { color: var(--expense); }
 
         /* Form Layout */
         .form-group {
@@ -49,10 +117,12 @@
         }
         input, select, button {
             padding: 10px;
-            border: 1px solid #ccc;
+            border: 1px solid var(--input-border);
             border-radius: 6px;
             font-size: 1rem;
             box-sizing: border-box;
+            background: var(--input-bg);
+            color: var(--text);
         }
         input[type="text"], input[type="date"] { flex: 2; }
         input[type="number"] { flex: 1; }
@@ -64,8 +134,8 @@
             font-weight: bold;
             transition: background 0.2s;
         }
-        .btn-blue { background: #2980b9; width: 100%; }
-        .btn-blue:hover { background: #2471a3; }
+        .btn-blue { background: var(--accent); width: 100%; }
+        .btn-blue:hover { background: var(--accent-hover); }
         .btn-green { background: #27ae60; width: 100%; }
         .btn-green:hover { background: #219653; }
 
@@ -75,8 +145,8 @@
             display: flex;
             align-items: center;
             padding: 12px 10px;
-            border-bottom: 1px solid #eee;
-            background: white;
+            border-bottom: 1px solid var(--line);
+            background: var(--card-bg);
             transition: background 0.2s;
         }
         .ledger-item:last-child { border-bottom: none; }
@@ -89,7 +159,7 @@
             position: absolute;
             left: 0;
             right: 0;
-            border-top: 2px dashed #2980b9;
+            border-top: 2px dashed var(--accent);
             pointer-events: none;
             z-index: 1;
         }
@@ -98,7 +168,7 @@
 
         .drag-handle {
             cursor: grab;
-            color: #bdc3c7;
+            color: var(--handle);
             padding-right: 15px;
             font-size: 1.2rem;
             user-select: none;
@@ -107,40 +177,44 @@
 
         .item-left { flex-grow: 1; display: flex; flex-direction: column; }
         .item-desc { font-weight: 500; }
-        .item-date { font-size: 0.8em; color: #7f8c8d; margin-top: 2px; }
+        .item-date { font-size: 0.8em; color: var(--muted); margin-top: 2px; }
 
         .item-right { text-align: right; margin-right: 15px; min-width: 80px; }
         .item-amount { font-weight: bold; font-size: 1.1em; }
-        .running-total { font-size: 0.85em; color: #95a5a6; margin-top: 2px; }
+        .running-total { font-size: 0.85em; color: var(--faint); margin-top: 2px; }
 
         .item-actions { display: flex; gap: 5px; }
         .action-btn {
-            background: #e0e4e8;
-            color: #333;
+            background: var(--action-bg);
+            color: var(--text);
             padding: 6px 8px;
             border-radius: 4px;
             font-size: 0.9rem;
         }
-        .action-btn:hover { background: #cbd0d5; }
+        .action-btn:hover { background: var(--action-bg-hover); }
 
-        .expense { color: #e74c3c; }
-        .income { color: #27ae60; }
+        .expense { color: var(--expense); }
+        .income { color: var(--income); }
 
-        .empty-state { text-align: center; color: #95a5a6; font-style: italic; }
-        hr { border: 0; border-top: 1px solid #eee; margin: 1.5rem 0; }
+        .empty-state { text-align: center; color: var(--faint); font-style: italic; }
+        hr { border: 0; border-top: 1px solid var(--line); margin: 1.5rem 0; }
     </style>
 </head>
 <body>
 
-    <h1>Money Tracker</h1>
+    <div class="page-header">
+        <h1>Money Tracker</h1>
+        <button type="button" id="themeToggle" class="theme-toggle">🌙 Dark mode</button>
+    </div>
 
     <div class="balance-box">
         <p>Current Total</p>
         <h2 id="displayTotal">£0.00</h2>
     </div>
 
-    <div class="card">
-        <h3>1. Set Current Amount</h3>
+    <!-- Shown only while there are no items -->
+    <div class="card" id="startCard">
+        <h3>Set Current Amount</h3>
         <form id="startForm">
             <div class="form-group">
                 <input type="number" id="startAmount" placeholder="Enter starting £" step="0.01" required>
@@ -149,8 +223,9 @@
         </form>
     </div>
 
+    <!-- Shown only once there are items -->
     <div class="card" id="formCard">
-        <h3 id="formTitle">2. Add Income or Expense</h3>
+        <h3 id="formTitle">Add Income or Expense</h3>
         <form id="transactionForm">
             <div class="form-group-column">
                 <div class="form-group">
@@ -194,11 +269,28 @@
 
         // DOM Elements
         const displayTotal = document.getElementById('displayTotal');
+        const startCard = document.getElementById('startCard');
         const startForm = document.getElementById('startForm');
+        const formCard = document.getElementById('formCard');
         const transactionForm = document.getElementById('transactionForm');
         const ledgerList = document.getElementById('ledgerList');
         const submitBtn = document.getElementById('submitBtn');
         const formTitle = document.getElementById('formTitle');
+        const themeToggle = document.getElementById('themeToggle');
+
+        // Dark mode: remembered in the browser; if never chosen, follows the device setting
+        function applyTheme(dark) {
+            document.body.classList.toggle('dark', dark);
+            themeToggle.textContent = dark ? '☀️ Light mode' : '🌙 Dark mode';
+        }
+        const savedTheme = localStorage.getItem('myBudgetTheme');
+        applyTheme(savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+        themeToggle.addEventListener('click', function() {
+            const dark = !document.body.classList.contains('dark');
+            applyTheme(dark);
+            localStorage.setItem('myBudgetTheme', dark ? 'dark' : 'light');
+        });
 
         // Initial Load
         updateUI();
@@ -207,14 +299,13 @@
         function stopEditing() {
             editingItem = null;
             submitBtn.textContent = 'Add to Tracker';
-            formTitle.textContent = '2. Add Income or Expense';
+            formTitle.textContent = 'Add Income or Expense';
             transactionForm.reset();
         }
 
-        // 1. Handle Setting Starting Balance
+        // 1. Handle Setting Starting Balance (only possible while the list is empty)
         startForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            if(transactions.length > 0 && !confirm("This will clear your current tracker and start over. Continue?")) return;
 
             const startAmount = parseFloat(document.getElementById('startAmount').value);
 
@@ -224,9 +315,6 @@
                 type: "income",
                 date: ""
             }];
-
-            // The item being edited (if any) no longer exists
-            if (editingItem) stopEditing();
 
             document.getElementById('startAmount').value = '';
             saveData();
@@ -270,7 +358,7 @@
             editingItem = t;
             submitBtn.textContent = 'Update Transaction';
             formTitle.textContent = 'Editing Transaction';
-            document.getElementById('formCard').scrollIntoView({ behavior: 'smooth' });
+            formCard.scrollIntoView({ behavior: 'smooth' });
         };
 
         // Delete Function
@@ -364,10 +452,15 @@
             ledgerList.innerHTML = '';
             let runningTotal = 0;
 
-            if (transactions.length === 0) {
+            // Show "Set Current Amount" until there are items, then swap to "Add Income or Expense"
+            const hasItems = transactions.length > 0;
+            startCard.hidden = hasItems;
+            formCard.hidden = !hasItems;
+
+            if (!hasItems) {
                 ledgerList.innerHTML = '<div class="empty-state">No transactions added yet.</div>';
                 displayTotal.textContent = "£0.00";
-                displayTotal.style.color = '#2980b9';
+                displayTotal.classList.remove('negative');
                 return;
             }
 
@@ -424,7 +517,7 @@
 
             // Update big number
             displayTotal.textContent = formatMoney(runningTotal);
-            displayTotal.style.color = toPence(runningTotal) < 0 ? '#e74c3c' : '#2980b9';
+            displayTotal.classList.toggle('negative', toPence(runningTotal) < 0);
         }
     </script>
 </body>
