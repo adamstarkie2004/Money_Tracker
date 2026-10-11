@@ -21,7 +21,7 @@
             margin-bottom: 1.5rem;
         }
         h1, h2, h3 { margin-top: 0; color: #2c3e50; }
-        
+
         /* Total Display Box */
         .balance-box {
             text-align: center;
@@ -56,7 +56,7 @@
         }
         input[type="text"], input[type="date"] { flex: 2; }
         input[type="number"] { flex: 1; }
-        
+
         button {
             color: white;
             border: none;
@@ -71,6 +71,7 @@
 
         /* Ledger / List */
         .ledger-item {
+            position: relative;
             display: flex;
             align-items: center;
             padding: 12px 10px;
@@ -79,8 +80,20 @@
             transition: background 0.2s;
         }
         .ledger-item:last-child { border-bottom: none; }
-        .ledger-item.over { border-top: 2px dashed #2980b9; } /* Drag and drop visual */
-        
+
+        /* Drag and drop visual: dotted line on the edge where the row will land */
+        .ledger-item.drop-above::before,
+        .ledger-item.drop-below::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            border-top: 2px dashed #2980b9;
+            pointer-events: none;
+        }
+        .ledger-item.drop-above::before { top: -1px; }
+        .ledger-item.drop-below::after { bottom: -1px; }
+
         .drag-handle {
             cursor: grab;
             color: #bdc3c7;
@@ -93,24 +106,24 @@
         .item-left { flex-grow: 1; display: flex; flex-direction: column; }
         .item-desc { font-weight: 500; }
         .item-date { font-size: 0.8em; color: #7f8c8d; margin-top: 2px; }
-        
+
         .item-right { text-align: right; margin-right: 15px; min-width: 80px; }
         .item-amount { font-weight: bold; font-size: 1.1em; }
         .running-total { font-size: 0.85em; color: #95a5a6; margin-top: 2px; }
 
         .item-actions { display: flex; gap: 5px; }
-        .action-btn { 
-            background: #e0e4e8; 
-            color: #333; 
-            padding: 6px 8px; 
-            border-radius: 4px; 
+        .action-btn {
+            background: #e0e4e8;
+            color: #333;
+            padding: 6px 8px;
+            border-radius: 4px;
             font-size: 0.9rem;
         }
         .action-btn:hover { background: #cbd0d5; }
 
         .expense { color: #e74c3c; }
         .income { color: #27ae60; }
-        
+
         .empty-state { text-align: center; color: #95a5a6; font-style: italic; }
         hr { border: 0; border-top: 1px solid #eee; margin: 1.5rem 0; }
     </style>
@@ -166,8 +179,11 @@
         let transactions = JSON.parse(localStorage.getItem('myBudgetTracker')) || [];
         let editIndex = -1; // Keeps track of which item we are currently editing
 
-        // Formatting currency
-        const formatMoney = (amount) => "£" + amount.toFixed(2);
+        // Formatting currency (negative amounts come out as -£5.00, not £-5.00)
+        const formatMoney = (amount) => {
+            const digits = Math.abs(amount).toFixed(2);
+            return (amount < 0 && digits !== "0.00" ? "-£" : "£") + digits;
+        };
 
         // Save to browser storage
         const saveData = () => localStorage.setItem('myBudgetTracker', JSON.stringify(transactions));
@@ -180,6 +196,14 @@
         const submitBtn = document.getElementById('submitBtn');
         const formTitle = document.getElementById('formTitle');
 
+        // Clears the form and puts it back into "add" mode
+        function resetForm() {
+            editIndex = -1;
+            transactionForm.reset();
+            submitBtn.textContent = 'Add to Tracker';
+            formTitle.textContent = '2. Add Income or Expense';
+        }
+
         // Initial Load
         updateUI();
 
@@ -189,15 +213,16 @@
             if(transactions.length > 0 && !confirm("This will clear your current tracker and start over. Continue?")) return;
 
             const startAmount = parseFloat(document.getElementById('startAmount').value);
-            
+
             transactions = [{
                 desc: "Starting Balance",
                 amount: startAmount,
                 type: "income",
                 date: ""
             }];
-            
+
             document.getElementById('startAmount').value = '';
+            if (editIndex > -1) resetForm(); // the item being edited no longer exists
             saveData();
             updateUI();
         });
@@ -205,7 +230,7 @@
         // 2. Handle Adding/Editing Transactions
         transactionForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            
+
             const desc = document.getElementById('desc').value;
             const amount = parseFloat(document.getElementById('amount').value);
             const type = document.getElementById('type').value;
@@ -214,15 +239,13 @@
             if (editIndex > -1) {
                 // We are updating an existing item
                 transactions[editIndex] = { desc, amount, type, date };
-                editIndex = -1;
-                submitBtn.textContent = 'Add to Tracker';
-                formTitle.textContent = '2. Add Income or Expense';
+                resetForm();
             } else {
                 // We are adding a new item
                 transactions.push({ desc, amount, type, date });
+                transactionForm.reset();
             }
-            
-            transactionForm.reset();
+
             saveData();
             updateUI();
         });
@@ -234,7 +257,7 @@
             document.getElementById('amount').value = t.amount;
             document.getElementById('type').value = t.type;
             document.getElementById('date').value = t.date || '';
-            
+
             editIndex = index;
             submitBtn.textContent = 'Update Transaction';
             formTitle.textContent = 'Editing Transaction';
@@ -244,67 +267,94 @@
         // Delete Function
         window.deleteItem = function(index) {
             if (confirm("Delete this item?")) {
+                const editing = editIndex > -1 ? transactions[editIndex] : null;
                 transactions.splice(index, 1);
+
+                // Keep the edit pointing at the same item, or stop editing if it was the one deleted
+                if (editing) {
+                    editIndex = transactions.indexOf(editing);
+                    if (editIndex === -1) resetForm();
+                }
+
                 saveData();
                 updateUI();
             }
         };
 
         // --- Drag and Drop Functions ---
-        let dragStartIndex = null;
+        let dragStartIndex = null; // null means no row is being dragged
 
-        function wouldMove(targetIndex) {
-            return targetIndex !== dragStartIndex && targetIndex !== dragStartIndex + 1;
+        // A "slot" is a gap between rows: slot i is just above row i, so
+        // slot transactions.length is below the last row.
+        // Pointer in the top half of a row means the slot above it, bottom half the slot below.
+        function slotFromEvent(e, row) {
+            const rect = row.getBoundingClientRect();
+            const index = +row.dataset.index;
+            return e.clientY < rect.top + rect.height / 2 ? index : index + 1;
         }
 
-        function clearOver() {
-            ledgerList.querySelectorAll('.ledger-item.over')
-                    .forEach(el => el.classList.remove('over'));
+        // The slots directly above and below the dragged row are where it already is
+        function wouldMove(slot) {
+            return dragStartIndex !== null &&
+                   slot !== dragStartIndex &&
+                   slot !== dragStartIndex + 1;
+        }
+
+        // Show the dotted line at one slot only (pass null to show it nowhere)
+        function setDropLine(slot) {
+            const rows = ledgerList.querySelectorAll('.ledger-item');
+            rows.forEach((row, i) => {
+                row.classList.toggle('drop-above', slot === i);
+                row.classList.toggle('drop-below', slot === rows.length && i === rows.length - 1);
+            });
         }
 
         function dragStart(e) {
             dragStartIndex = +this.dataset.index;
             e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', '');
         }
 
+        // Runs for both dragenter and dragover
         function dragOver(e) {
+            if (dragStartIndex === null) return; // something other than one of our rows is being dragged
             e.preventDefault();
-            const targetIndex = +this.dataset.index;
-
-            if (dragStartIndex !== null && wouldMove(targetIndex)) {
-                if (!this.classList.contains('over')) {
-                    clearOver();                 
-                    this.classList.add('over');
-                }
-            } else {
-                this.classList.remove('over');   
-            }
+            const slot = slotFromEvent(e, this);
+            setDropLine(wouldMove(slot) ? slot : null);
         }
 
         function dragLeave(e) {
-            if (!this.contains(e.relatedTarget)) this.classList.remove('over');
-        }
-
-        function dragEnd() {
-            clearOver();         
-            dragStartIndex = null;
+            // This also fires when the pointer moves between rows, or between the text and
+            // buttons inside a row. Only remove the line once the pointer has left the list.
+            const nowOver = e.relatedTarget || document.elementFromPoint(e.clientX, e.clientY);
+            if (nowOver && ledgerList.contains(nowOver)) return;
+            setDropLine(null);
         }
 
         function dragDrop(e) {
-            e.preventDefault();
             e.stopPropagation();
-            const dragEndIndex = +this.dataset.index;
-            clearOver();
+            const from = dragStartIndex;
+            const slot = slotFromEvent(e, this);
+            const moves = wouldMove(slot);
+            dragEnd();
+            if (!moves) return; // dropped where it started - nothing to do
 
-            if (dragStartIndex === null || !wouldMove(dragEndIndex)) return; 
+            const editing = editIndex > -1 ? transactions[editIndex] : null;
 
-            const itemToMove = transactions.splice(dragStartIndex, 1)[0];
-            const insertIndex = dragStartIndex < dragEndIndex ? dragEndIndex - 1 : dragEndIndex;
+            const itemToMove = transactions.splice(from, 1)[0];
+            const insertIndex = from < slot ? slot - 1 : slot;
             transactions.splice(insertIndex, 0, itemToMove);
+
+            // Keep the edit pointing at the same item after the reorder
+            if (editing) editIndex = transactions.indexOf(editing);
 
             saveData();
             updateUI();
+        }
+
+        // Tidy up when a drag finishes or is cancelled
+        function dragEnd() {
+            dragStartIndex = null;
+            setDropLine(null);
         }
 
         // 3. Update the Screen
@@ -358,6 +408,7 @@
 
                 // Add drag and drop event listeners
                 div.addEventListener('dragstart', dragStart);
+                div.addEventListener('dragenter', dragOver);
                 div.addEventListener('dragover', dragOver);
                 div.addEventListener('dragleave', dragLeave);
                 div.addEventListener('drop', dragDrop);
@@ -367,7 +418,7 @@
             });
 
             // Update big number
-            displayTotal.textContent = (runningTotal < 0 ? "-" : "") + formatMoney(runningTotal);
+            displayTotal.textContent = formatMoney(runningTotal);
             displayTotal.style.color = runningTotal < 0 ? '#e74c3c' : '#2980b9';
         }
     </script>
