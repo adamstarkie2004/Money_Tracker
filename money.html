@@ -71,7 +71,7 @@
 
         /* Ledger / List */
         .ledger-item {
-            position: relative;
+            position: relative; /* so the drop line can be positioned on the row */
             display: flex;
             align-items: center;
             padding: 12px 10px;
@@ -81,7 +81,8 @@
         }
         .ledger-item:last-child { border-bottom: none; }
 
-        /* Drag and drop visual: dotted line on the edge where the row will land */
+        /* Drag and drop visual: the dotted line is drawn on top of the rows
+           (not as part of them), so the rows don't move when it appears. */
         .ledger-item.drop-above::before,
         .ledger-item.drop-below::after {
             content: '';
@@ -90,6 +91,7 @@
             right: 0;
             border-top: 2px dashed #2980b9;
             pointer-events: none;
+            z-index: 1;
         }
         .ledger-item.drop-above::before { top: -1px; }
         .ledger-item.drop-below::after { bottom: -1px; }
@@ -177,12 +179,14 @@
     <script>
         // Load existing data from the browser, or start fresh
         let transactions = JSON.parse(localStorage.getItem('myBudgetTracker')) || [];
-        let editIndex = -1; // Keeps track of which item we are currently editing
+        let editingItem = null; // The transaction currently being edited (null when adding a new one)
 
-        // Formatting currency (negative amounts come out as -£5.00, not £-5.00)
+        // Formatting currency: £5.00, or -£5.00 for a negative amount.
+        // Rounding to whole pence first stops a tiny rounding error showing as "-£0.00".
+        const toPence = (amount) => Math.round(amount * 100);
         const formatMoney = (amount) => {
-            const digits = Math.abs(amount).toFixed(2);
-            return (amount < 0 && digits !== "0.00" ? "-£" : "£") + digits;
+            const pence = toPence(amount);
+            return (pence < 0 ? "-" : "") + "£" + (Math.abs(pence) / 100).toFixed(2);
         };
 
         // Save to browser storage
@@ -196,16 +200,16 @@
         const submitBtn = document.getElementById('submitBtn');
         const formTitle = document.getElementById('formTitle');
 
-        // Clears the form and puts it back into "add" mode
-        function resetForm() {
-            editIndex = -1;
-            transactionForm.reset();
-            submitBtn.textContent = 'Add to Tracker';
-            formTitle.textContent = '2. Add Income or Expense';
-        }
-
         // Initial Load
         updateUI();
+
+        // Leave edit mode: clear the form and put it back to "add" mode
+        function stopEditing() {
+            editingItem = null;
+            submitBtn.textContent = 'Add to Tracker';
+            formTitle.textContent = '2. Add Income or Expense';
+            transactionForm.reset();
+        }
 
         // 1. Handle Setting Starting Balance
         startForm.addEventListener('submit', function(e) {
@@ -221,8 +225,10 @@
                 date: ""
             }];
 
+            // The item being edited (if any) no longer exists
+            if (editingItem) stopEditing();
+
             document.getElementById('startAmount').value = '';
-            if (editIndex > -1) resetForm(); // the item being edited no longer exists
             saveData();
             updateUI();
         });
@@ -236,16 +242,19 @@
             const type = document.getElementById('type').value;
             const date = document.getElementById('date').value;
 
-            if (editIndex > -1) {
+            // Look up where the item being edited is right now, so it is still
+            // found if rows were reordered or deleted since Edit was clicked
+            const editPosition = editingItem ? transactions.indexOf(editingItem) : -1;
+
+            if (editPosition > -1) {
                 // We are updating an existing item
-                transactions[editIndex] = { desc, amount, type, date };
-                resetForm();
+                transactions[editPosition] = { desc, amount, type, date };
             } else {
                 // We are adding a new item
                 transactions.push({ desc, amount, type, date });
-                transactionForm.reset();
             }
 
+            stopEditing(); // also clears the form
             saveData();
             updateUI();
         });
@@ -258,7 +267,7 @@
             document.getElementById('type').value = t.type;
             document.getElementById('date').value = t.date || '';
 
-            editIndex = index;
+            editingItem = t;
             submitBtn.textContent = 'Update Transaction';
             formTitle.textContent = 'Editing Transaction';
             document.getElementById('formCard').scrollIntoView({ behavior: 'smooth' });
@@ -267,41 +276,39 @@
         // Delete Function
         window.deleteItem = function(index) {
             if (confirm("Delete this item?")) {
-                const editing = editIndex > -1 ? transactions[editIndex] : null;
+                // Deleting the row that is being edited cancels the edit
+                if (transactions[index] === editingItem) stopEditing();
+
                 transactions.splice(index, 1);
-
-                // Keep the edit pointing at the same item, or stop editing if it was the one deleted
-                if (editing) {
-                    editIndex = transactions.indexOf(editing);
-                    if (editIndex === -1) resetForm();
-                }
-
                 saveData();
                 updateUI();
             }
         };
 
         // --- Drag and Drop Functions ---
+        // A "slot" is a gap between rows: 0 = above the first row, 1 = above the
+        // second row, ... and one past the last row = at the bottom of the list.
         let dragStartIndex = null; // null means no row is being dragged
+        let dropSlot = null;       // the slot the dotted line is currently shown at (null = none)
 
-        // A "slot" is a gap between rows: slot i is just above row i, so
-        // slot transactions.length is below the last row.
-        // Pointer in the top half of a row means the slot above it, bottom half the slot below.
-        function slotFromEvent(e, row) {
+        // Top half of a row = the slot above it, bottom half = the slot below it
+        function slotUnderPointer(row, e) {
             const rect = row.getBoundingClientRect();
             const index = +row.dataset.index;
             return e.clientY < rect.top + rect.height / 2 ? index : index + 1;
         }
 
-        // The slots directly above and below the dragged row are where it already is
+        // The slots directly above and below the dragged row would leave it
+        // exactly where it started, so neither of those counts as a move.
         function wouldMove(slot) {
             return dragStartIndex !== null &&
                    slot !== dragStartIndex &&
                    slot !== dragStartIndex + 1;
         }
 
-        // Show the dotted line at one slot only (pass null to show it nowhere)
+        // Draw the dotted line at one slot (pass null to draw it nowhere)
         function setDropLine(slot) {
+            dropSlot = slot;
             const rows = ledgerList.querySelectorAll('.ledger-item');
             rows.forEach((row, i) => {
                 row.classList.toggle('drop-above', slot === i);
@@ -318,13 +325,13 @@
         function dragOver(e) {
             if (dragStartIndex === null) return; // something other than one of our rows is being dragged
             e.preventDefault();
-            const slot = slotFromEvent(e, this);
+            const slot = slotUnderPointer(this, e);
             setDropLine(wouldMove(slot) ? slot : null);
         }
 
         function dragLeave(e) {
-            // This also fires when the pointer moves between rows, or between the text and
-            // buttons inside a row. Only remove the line once the pointer has left the list.
+            // This fires whenever the pointer moves between elements, including the
+            // text and buttons inside rows. Only clear the line once it has left the list.
             const nowOver = e.relatedTarget || document.elementFromPoint(e.clientX, e.clientY);
             if (nowOver && ledgerList.contains(nowOver)) return;
             setDropLine(null);
@@ -333,19 +340,14 @@
         function dragDrop(e) {
             e.stopPropagation();
             const from = dragStartIndex;
-            const slot = slotFromEvent(e, this);
-            const moves = wouldMove(slot);
+            const slot = dropSlot; // land exactly where the line was showing
             dragEnd();
-            if (!moves) return; // dropped where it started - nothing to do
-
-            const editing = editIndex > -1 ? transactions[editIndex] : null;
+            if (from === null || slot === null) return; // dropped where it started - nothing to do
 
             const itemToMove = transactions.splice(from, 1)[0];
-            const insertIndex = from < slot ? slot - 1 : slot;
+            // Removing the row shifts every slot below it up by one
+            const insertIndex = slot > from ? slot - 1 : slot;
             transactions.splice(insertIndex, 0, itemToMove);
-
-            // Keep the edit pointing at the same item after the reorder
-            if (editing) editIndex = transactions.indexOf(editing);
 
             saveData();
             updateUI();
@@ -381,8 +383,11 @@
                     dateString = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
                 }
 
-                const sign = t.type === 'income' ? '+' : '-';
-                const colorClass = t.type === 'income' ? 'income' : 'expense';
+                // Income normally shows as a plus and an expense as a minus. A negative
+                // amount (e.g. an overdrawn starting balance) flips that.
+                const isMinus = t.type === 'income' ? t.amount < 0 : t.amount >= 0;
+                const sign = isMinus ? '-' : '+';
+                const colorClass = isMinus ? 'expense' : 'income';
                 const displayName = t.desc ? t.desc : '<em>No reference</em>';
 
                 const div = document.createElement('div');
@@ -397,7 +402,7 @@
                         <span class="item-date">${dateString}</span>
                     </div>
                     <div class="item-right">
-                        <div class="item-amount ${colorClass}">${sign}${formatMoney(t.amount)}</div>
+                        <div class="item-amount ${colorClass}">${sign}${formatMoney(Math.abs(t.amount))}</div>
                         <div class="running-total">= ${formatMoney(runningTotal)}</div>
                     </div>
                     <div class="item-actions">
@@ -419,7 +424,7 @@
 
             // Update big number
             displayTotal.textContent = formatMoney(runningTotal);
-            displayTotal.style.color = runningTotal < 0 ? '#e74c3c' : '#2980b9';
+            displayTotal.style.color = toPence(runningTotal) < 0 ? '#e74c3c' : '#2980b9';
         }
     </script>
 </body>
