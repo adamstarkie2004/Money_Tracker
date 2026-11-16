@@ -60,11 +60,16 @@
         }
 
 
-        /* On wide screens, make room for the panel when it is open
-           (on narrow screens it simply slides over the page) */
-        html { transition: padding-right 0.25s ease; }
+        /* On wide screens, make room for an open panel (on narrow screens
+           it simply slides over the page) */
+        html { transition: padding 0.25s ease; }
         @media (min-width: 960px) {
             html.panel-open { padding-right: 340px; }
+            html.left-open { padding-left: 340px; }
+        }
+        /* Not enough room for both at once: let them overlap instead of squashing the tracker */
+        @media (min-width: 960px) and (max-width: 1329px) {
+            html.panel-open.left-open { padding-left: 0; padding-right: 0; }
         }
 
 
@@ -247,37 +252,51 @@
         hr { border: 0; border-top: 1px solid var(--line); margin: 1.5rem 0; }
 
 
-        /* ---------- Upcoming expenses: pop-out panel ---------- */
-        .upcoming-panel {
+        /* ---------- Side panels (upcoming on the right, recurring on the left) ---------- */
+        .side-panel {
             position: fixed;
             top: 0;
-            right: 0;
             width: 320px;
             max-width: 90vw;
             height: 100vh;
             background: var(--card-bg);
-            box-shadow: -4px 0 12px var(--card-shadow);
-            transform: translateX(100%);
             transition: transform 0.25s ease, background-color 0.2s;
             z-index: 100;
         }
-        .upcoming-panel.open { transform: translateX(0); }
+        .side-panel.right {
+            right: 0;
+            box-shadow: -4px 0 12px var(--card-shadow);
+            transform: translateX(100%);
+        }
+        .side-panel.left {
+            left: 0;
+            box-shadow: 4px 0 12px var(--card-shadow);
+            transform: translateX(-100%);
+        }
+        .side-panel.open { transform: translateX(0); }
 
 
-        /* The tab sticks out of the panel's left edge so it's visible when closed */
+        /* The tab sticks out of the panel's outer edge so it's visible when closed */
         .panel-tab {
             position: absolute;
-            left: -42px;
             top: 120px;
             width: 42px;
             padding: 16px 0;
             background: var(--accent);
             color: white;
-            border-radius: 10px 0 0 10px;
             writing-mode: vertical-rl;
             white-space: nowrap;
             font-size: 0.95rem;
+        }
+        .side-panel.right .panel-tab {
+            left: -42px;
+            border-radius: 10px 0 0 10px;
             box-shadow: -3px 2px 8px var(--card-shadow);
+        }
+        .side-panel.left .panel-tab {
+            right: -42px;
+            border-radius: 0 10px 10px 0;
+            box-shadow: 3px 2px 8px var(--card-shadow);
         }
         .panel-tab:hover { background: var(--accent-hover); }
 
@@ -291,7 +310,7 @@
             flex-direction: column;
             transition: visibility 0.25s;
         }
-        .upcoming-panel:not(.open) .panel-body { visibility: hidden; } /* keeps closed panel out of tab order */
+        .side-panel:not(.open) .panel-body { visibility: hidden; } /* keeps closed panel out of tab order */
 
 
         .panel-header {
@@ -305,13 +324,13 @@
         .panel-total strong { color: var(--text); }
 
 
-        .upcoming-panel input, .upcoming-panel select { min-width: 0; }
-        .upcoming-panel .form-group { margin-bottom: 10px; }
-        .upcoming-panel .field-full { flex: 1 1 100%; }
-        .upcoming-panel .field-half { flex: 1 1 100px; }
+        .side-panel input, .side-panel select { min-width: 0; }
+        .side-panel .form-group { margin-bottom: 10px; }
+        .side-panel .field-full { flex: 1 1 100%; }
+        .side-panel .field-half { flex: 1 1 100px; }
 
 
-        #upcomingList { flex-grow: 1; min-height: 120px; margin-top: 0.5rem; }
+        #upcomingList, #recurringList { flex-grow: 1; min-height: 120px; margin-top: 0.5rem; }
 
 
         /* Priority sections: each starts with a coloured divider that collapses it */
@@ -411,8 +430,45 @@
     </div>
 
 
+    <!-- Recurring payments: slides in from the left -->
+    <aside class="side-panel left" id="recurringPanel">
+        <button type="button" class="panel-tab" id="recTab" aria-expanded="false" aria-controls="recurringPanel">Recurring</button>
+
+
+        <div class="panel-body">
+            <div class="panel-header">
+                <h3>Recurring</h3>
+                <button type="button" class="action-btn" id="recClose" title="Close">✖</button>
+            </div>
+            <div class="panel-total">Drag an item into the tracker to add a copy of it.</div>
+
+
+            <form id="recurringForm">
+                <div class="form-group">
+                    <input type="text" id="recDesc" class="field-full" placeholder="What is it? (e.g. Rent)">
+                </div>
+                <div class="form-group">
+                    <input type="number" id="recAmount" class="field-half" placeholder="Amount (£)" step="0.01" required>
+                    <input type="number" id="recDay" class="field-half" placeholder="Day of month" min="1" max="31" step="1" title="Day of the month it is usually paid (optional)">
+                </div>
+                <div class="form-group">
+                    <select id="recType" class="field-full">
+                        <option value="expense">Expense (-)</option>
+                        <option value="income">Income (+)</option>
+                    </select>
+                </div>
+                <button type="submit" id="recSubmitBtn" class="btn-green">Add to Recurring</button>
+                <button type="button" id="recCancelBtn" class="btn-grey" hidden style="margin-top:8px;">Cancel edit</button>
+            </form>
+
+
+            <div id="recurringList"></div>
+        </div>
+    </aside>
+
+
     <!-- Upcoming expenses: slides in from the right -->
-    <aside class="upcoming-panel" id="upcomingPanel">
+    <aside class="side-panel right" id="upcomingPanel">
         <button type="button" class="panel-tab" id="panelTab" aria-expanded="false" aria-controls="upcomingPanel">Upcoming</button>
 
 
@@ -462,9 +518,11 @@
         // Load existing data from the browser, or start fresh
         let transactions = JSON.parse(localStorage.getItem('myBudgetTracker')) || [];
         let upcoming = JSON.parse(localStorage.getItem('myBudgetUpcoming')) || [];
+        let recurring = JSON.parse(localStorage.getItem('myBudgetRecurring')) || []; // { desc, amount, type, day }
         let collapsed = JSON.parse(localStorage.getItem('myBudgetCollapsed')) || {}; // e.g. { low: true }
-        let editingItem = null;     // The transaction currently being edited (null when adding a new one)
-        let editingUpcoming = null; // The upcoming item currently being edited
+        let editingItem = null;      // The transaction currently being edited (null when adding a new one)
+        let editingUpcoming = null;  // The upcoming item currently being edited
+        let editingRecurring = null; // The recurring item currently being edited
 
 
         // The upcoming list is kept in priority order (high, then medium, then low).
@@ -478,8 +536,8 @@
         normalizeUpcoming();
 
 
-        // The two lists are referred to by name: 'main' and 'upcoming'
-        const getList = (name) => name === 'upcoming' ? upcoming : transactions;
+        // The lists are referred to by name: 'main', 'upcoming' and 'recurring'
+        const getList = (name) => name === 'upcoming' ? upcoming : name === 'recurring' ? recurring : transactions;
 
 
         // Formatting currency: £5.00, or -£5.00 for a negative amount.
@@ -491,11 +549,89 @@
         };
 
 
+        // Turns a recurring item's "day of month" into a full date in the current month.
+        // Short months are handled (31 becomes the 30th, or 28th/29th in February).
+        function dateForDay(day) {
+            if (!day) return '';
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth(); // 0-11
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const d = Math.min(day, daysInMonth);
+            return `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        }
+
+        // Works out the full date for a recurring item dropped at a given slot in the tracker.
+        // It looks at the nearest dated transaction above and below the drop position and
+        // picks the month that keeps the new item in date order with them.
+        // With no dated neighbours at all, it falls back to the current month.
+        function estimateDateForSlot(day, slot) {
+            if (!day) return '';
+
+
+            const toDays = (y, m, d) => Date.UTC(y, m, d) / 86400000;
+            const readDate = (s) => {
+                const [y, m, d] = s.split('-').map(Number);
+                return { y, m: m - 1, days: toDays(y, m - 1, d) };
+            };
+
+
+            // Nearest rows with a date above and below the drop position
+            let prev = null, next = null;
+            for (let i = slot - 1; i >= 0 && !prev; i--) {
+                if (transactions[i].date) prev = readDate(transactions[i].date);
+            }
+            for (let i = slot; i < transactions.length && !next; i++) {
+                if (transactions[i].date) next = readDate(transactions[i].date);
+            }
+            // If the list isn't in date order around here, the row below tells us nothing useful
+            if (prev && next && prev.days > next.days) next = null;
+
+
+            if (!prev && !next) return dateForDay(day);
+
+
+            // Candidate dates: that day in every month from just before the first
+            // neighbour to just after the last one (short months are clamped)
+            const first = prev || next;
+            const last = next || prev;
+            const candidates = [];
+            for (let idx = first.y * 12 + first.m - 1; idx <= last.y * 12 + last.m + 1; idx++) {
+                const y = Math.floor(idx / 12);
+                const m = idx % 12;
+                const d = Math.min(day, new Date(y, m + 1, 0).getDate());
+                candidates.push({ y, m, d, days: toDays(y, m, d) });
+            }
+
+
+            const fits = candidates.filter(c =>
+                (!prev || c.days >= prev.days) && (!next || c.days <= next.days));
+
+
+            let best;
+            if (fits.length) {
+                // Only a row above: the first matching date after it.
+                // Only a row below: the last matching date before it.
+                // Both: the earliest date that sits between them.
+                best = (next && !prev) ? fits[fits.length - 1] : fits[0];
+            } else {
+                // Nothing fits between the neighbours (e.g. they are a few days apart),
+                // so take whichever date comes closest to the gap
+                const distance = c => Math.max(0, prev ? prev.days - c.days : 0, next ? c.days - next.days : 0);
+                best = candidates.reduce((a, b) => distance(b) < distance(a) ? b : a);
+            }
+
+
+            return `${best.y}-${String(best.m + 1).padStart(2, '0')}-${String(best.d).padStart(2, '0')}`;
+        }
+
+
         // Save to browser storage
         const saveData = () => {
             normalizeUpcoming();
             localStorage.setItem('myBudgetTracker', JSON.stringify(transactions));
             localStorage.setItem('myBudgetUpcoming', JSON.stringify(upcoming));
+            localStorage.setItem('myBudgetRecurring', JSON.stringify(recurring));
         };
 
 
@@ -526,6 +662,19 @@
         const upCancelBtn = document.getElementById('upCancelBtn');
 
 
+        const recurringPanel = document.getElementById('recurringPanel');
+        const recTab = document.getElementById('recTab');
+        const recClose = document.getElementById('recClose');
+        const recurringList = document.getElementById('recurringList');
+        const recurringForm = document.getElementById('recurringForm');
+        const recDesc = document.getElementById('recDesc');
+        const recAmount = document.getElementById('recAmount');
+        const recDay = document.getElementById('recDay');
+        const recType = document.getElementById('recType');
+        const recSubmitBtn = document.getElementById('recSubmitBtn');
+        const recCancelBtn = document.getElementById('recCancelBtn');
+
+
         // Dark mode: remembered in the browser; if never chosen, follows the device setting
         function applyTheme(dark) {
             document.body.classList.toggle('dark', dark);
@@ -542,17 +691,21 @@
         });
 
 
-        // Upcoming panel open/closed: remembered in the browser
-        function setPanelOpen(open) {
-            upcomingPanel.classList.toggle('open', open);
-            document.documentElement.classList.toggle('panel-open', open);
-            panelTab.setAttribute('aria-expanded', open);
-            localStorage.setItem('myBudgetPanel', open ? 'open' : 'closed');
+        // Side panels open/closed: each is remembered in the browser.
+        // htmlClass is what makes room for the panel on wide screens.
+        function setupPanel(panel, tab, closeBtn, storageKey, htmlClass) {
+            function set(open) {
+                panel.classList.toggle('open', open);
+                document.documentElement.classList.toggle(htmlClass, open);
+                tab.setAttribute('aria-expanded', open);
+                localStorage.setItem(storageKey, open ? 'open' : 'closed');
+            }
+            tab.addEventListener('click', () => set(!panel.classList.contains('open')));
+            closeBtn.addEventListener('click', () => set(false));
+            set(localStorage.getItem(storageKey) === 'open');
         }
-        const isPanelOpen = () => upcomingPanel.classList.contains('open');
-        panelTab.addEventListener('click', () => setPanelOpen(!isPanelOpen()));
-        panelClose.addEventListener('click', () => setPanelOpen(false));
-        setPanelOpen(localStorage.getItem('myBudgetPanel') === 'open');
+        setupPanel(upcomingPanel, panelTab, panelClose, 'myBudgetPanel', 'panel-open');
+        setupPanel(recurringPanel, recTab, recClose, 'myBudgetLeftPanel', 'left-open');
 
 
         // Collapse / expand a priority section by clicking its divider
@@ -583,7 +736,14 @@
             upCancelBtn.hidden = true;
             upcomingForm.reset();
         }
+        function stopEditingRecurring() {
+            editingRecurring = null;
+            recSubmitBtn.textContent = 'Add to Recurring';
+            recCancelBtn.hidden = true;
+            recurringForm.reset();
+        }
         upCancelBtn.addEventListener('click', stopEditingUpcoming);
+        recCancelBtn.addEventListener('click', stopEditingRecurring);
 
 
         // 1. Handle Setting Starting Balance (only possible while the list is empty)
@@ -670,6 +830,34 @@
         });
 
 
+        // Handle Adding/Editing Recurring items
+        recurringForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+
+            const desc = recDesc.value;
+            const amount = parseFloat(recAmount.value);
+            const type = recType.value;
+            let day = parseInt(recDay.value, 10);
+            if (!(day >= 1 && day <= 31)) day = ''; // no (or invalid) day = no date
+
+
+            const editPosition = editingRecurring ? recurring.indexOf(editingRecurring) : -1;
+
+
+            if (editPosition > -1) {
+                recurring[editPosition] = { desc, amount, type, day };
+            } else {
+                recurring.push({ desc, amount, type, day });
+            }
+
+
+            stopEditingRecurring();
+            saveData();
+            updateUI();
+        });
+
+
         // Edit Functions
         window.editItem = function(index) {
             const t = transactions[index];
@@ -701,6 +889,21 @@
         };
 
 
+        window.editRecurring = function(index) {
+            const t = recurring[index];
+            recDesc.value = t.desc || '';
+            recAmount.value = t.amount;
+            recDay.value = t.day || '';
+            recType.value = t.type;
+
+
+            editingRecurring = t;
+            recSubmitBtn.textContent = 'Update Recurring';
+            recCancelBtn.hidden = false;
+            recDesc.focus();
+        };
+
+
         // Delete Functions
         window.deleteItem = function(index) {
             if (confirm("Delete this item?")) {
@@ -727,8 +930,22 @@
         };
 
 
+        window.deleteRecurring = function(index) {
+            if (confirm("Delete this recurring item?")) {
+                if (recurring[index] === editingRecurring) stopEditingRecurring();
+
+
+                recurring.splice(index, 1);
+                saveData();
+                updateUI();
+            }
+        };
+
+
         // --- Drag and Drop Functions ---
         // Rows can be dragged within a list, or between the tracker and the upcoming panel.
+        // Rows from the recurring panel are copied into the tracker (they stay in the
+        // recurring list so they can be used again); they can also be reordered within it.
         // A "slot" is a gap between rows: 0 = above the first row, 1 = above the
         // second row, ... and one past the last row = at the bottom of the list.
         // In the upcoming list the target also records which priority section it is in,
@@ -762,9 +979,12 @@
         }
 
 
-        // The tracker can't receive items while it is empty (it needs a starting balance first)
+        // Which lists can the row being dragged be dropped into?
         function canDrop(list) {
-            return list !== 'main' || transactions.length > 0;
+            if (!dragSource) return false;
+            if (list === 'recurring') return dragSource.list === 'recurring'; // only reordering
+            if (list === 'upcoming') return dragSource.list !== 'recurring';
+            return transactions.length > 0; // the tracker needs a starting balance first
         }
 
 
@@ -802,10 +1022,8 @@
                 index: +this.dataset.index,
                 priority: this.dataset.priority || null
             };
-            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.effectAllowed = this.dataset.list === 'recurring' ? 'copyMove' : 'move';
             e.dataTransfer.setData('text/plain', ''); // Firefox won't start a drag without this
-            // Make sure the panel is open so there is somewhere to drop
-            if (!isPanelOpen()) setTimeout(() => setPanelOpen(true), 0);
         }
 
 
@@ -816,14 +1034,14 @@
         }
 
 
-        // The tracker card and the upcoming panel are both drop zones.
+        // The tracker card and both panels are drop zones.
         // Over a row: drop above/below it. Over a section but not a row: drop at the
-        // end of that section. Elsewhere in the panel: end of the medium section.
+        // end of that section. Elsewhere in the upcoming panel: end of the medium section.
         function zoneDragOver(listName, e) {
             if (!dragSource) return; // not one of our rows
             if (!canDrop(listName)) { setDropLine(null); return; }
             e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
+            e.dataTransfer.dropEffect = (dragSource.list === 'recurring' && listName === 'main') ? 'copy' : 'move';
 
 
             const row = e.target.closest && e.target.closest('.ledger-item');
@@ -835,7 +1053,7 @@
                 priority = row ? row.dataset.priority : (section ? section.dataset.priority : 'medium');
                 slot = row ? slotUnderPointer(row, e) : sectionEnd(priority);
             } else {
-                slot = row ? slotUnderPointer(row, e) : transactions.length;
+                slot = row ? slotUnderPointer(row, e) : getList(listName).length;
             }
 
 
@@ -859,6 +1077,21 @@
             const to = dropTarget; // land exactly where the line was showing
             dragEnd();
             if (!to || to.list !== listName) return; // dropped where it started - nothing to do
+
+
+            // Recurring item dropped into the tracker: add a COPY, leave the original in place
+            if (from.list === 'recurring' && to.list === 'main') {
+                const r = recurring[from.index];
+                transactions.splice(to.slot, 0, {
+                    desc: r.desc,
+                    amount: r.amount,
+                    type: r.type,
+                    date: estimateDateForSlot(r.day, to.slot)
+                });
+                saveData();
+                updateUI();
+                return;
+            }
 
 
             const source = getList(from.list);
@@ -893,7 +1126,7 @@
         }
 
 
-        [['main', ledgerCard], ['upcoming', upcomingPanel]].forEach(([name, zone]) => {
+        [['main', ledgerCard], ['upcoming', upcomingPanel], ['recurring', recurringPanel]].forEach(([name, zone]) => {
             zone.addEventListener('dragenter', e => zoneDragOver(name, e));
             zone.addEventListener('dragover', e => zoneDragOver(name, e));
             zone.addEventListener('dragleave', e => zoneDragLeave(zone, e));
@@ -912,12 +1145,15 @@
         // runningTotal is only passed for rows in the main tracker
         function createRow(t, index, listName, runningTotal) {
             const isMain = listName === 'main';
+            const showSign = listName !== 'upcoming'; // upcoming amounts are shown without a sign
 
 
-            // Format date only if one was entered (read straight from the text so
-            // time zones can't shift it by a day)
+            // Date line: the chosen date (read straight from the text so time zones
+            // can't shift it by a day), or the day of the month for recurring items
             let dateString = '';
-            if (t.date) {
+            if (listName === 'recurring') {
+                if (t.day) dateString = `Day ${t.day} of each month`;
+            } else if (t.date) {
                 const [, month, day] = t.date.split('-');
                 dateString = `${day}/${month}`;
             }
@@ -932,8 +1168,10 @@
             const amountText = formatMoney(Math.abs(t.amount));
 
 
-            const editFn = isMain ? 'editItem' : 'editUpcoming';
-            const deleteFn = isMain ? 'deleteItem' : 'deleteUpcoming';
+            const editFn = { main: 'editItem', upcoming: 'editUpcoming', recurring: 'editRecurring' }[listName];
+            const deleteFn = { main: 'deleteItem', upcoming: 'deleteUpcoming', recurring: 'deleteRecurring' }[listName];
+            const handleTitle = listName === 'recurring' ? 'Drag into the tracker to add a copy'
+                                                         : 'Drag to reorder or move to the other list';
 
 
             const div = document.createElement('div');
@@ -941,11 +1179,11 @@
             div.draggable = true;
             div.dataset.index = index;
             div.dataset.list = listName;
-            if (!isMain) div.dataset.priority = t.priority;
+            if (listName === 'upcoming') div.dataset.priority = t.priority;
 
 
             // Tracker rows: amount (with sign) and running total on the right.
-            // Upcoming rows: plain amount (no sign) underneath the reference.
+            // Panel rows: the amount underneath the reference.
             const middle = isMain ? `
                 <div class="item-left">
                     <span class="item-desc">${displayName}</span>
@@ -957,13 +1195,13 @@
                 </div>` : `
                 <div class="item-left">
                     <span class="item-desc">${displayName}</span>
-                    <span class="item-amount ${colorClass}">${amountText}</span>
+                    <span class="item-amount ${colorClass}">${showSign ? sign : ''}${amountText}</span>
                     ${dateString ? `<span class="item-date">${dateString}</span>` : ''}
                 </div>`;
 
 
             div.innerHTML = `
-                <div class="drag-handle" title="Drag to reorder or move to the other list">☰</div>
+                <div class="drag-handle" title="${handleTitle}">☰</div>
                 ${middle}
                 <div class="item-actions">
                     <button onclick="${editFn}(${index})" class="action-btn" title="Edit">✎</button>
@@ -975,6 +1213,20 @@
             div.addEventListener('dragstart', dragStart);
             div.addEventListener('dragend', dragEnd);
             return div;
+        }
+
+
+        function renderRecurring() {
+            recurringList.innerHTML = '';
+
+
+            if (recurring.length === 0) {
+                recurringList.innerHTML = '<div class="empty-state">No recurring items yet.<br>Add things you pay or receive regularly, such as rent or wages.</div>';
+            }
+
+
+            recurring.forEach((t, index) => recurringList.appendChild(createRow(t, index, 'recurring')));
+            recTab.textContent = recurring.length ? `Recurring (${recurring.length})` : 'Recurring';
         }
 
 
@@ -1032,6 +1284,7 @@
         // 3. Update the Screen
         function updateUI() {
             renderUpcoming();
+            renderRecurring();
             ledgerList.innerHTML = '';
             let runningTotal = 0;
 
