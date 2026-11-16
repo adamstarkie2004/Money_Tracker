@@ -27,6 +27,9 @@
             --action-bg-hover: #cbd0d5;
             --expense: #e74c3c;
             --income: #27ae60;
+            --p-high: #e74c3c;
+            --p-medium: #e69a0e;
+            --p-low: #3498db;
         }
         /* Colours - dark mode */
         body.dark {
@@ -51,7 +54,19 @@
             --action-bg-hover: #434b58;
             --expense: #ff6b5b;
             --income: #2ecc71;
+            --p-high: #ff6b5b;
+            --p-medium: #f5b041;
+            --p-low: #5dade2;
         }
+
+
+        /* On wide screens, make room for the panel when it is open
+           (on narrow screens it simply slides over the page) */
+        html { transition: padding-right 0.25s ease; }
+        @media (min-width: 960px) {
+            html.panel-open { padding-right: 340px; }
+        }
+
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -71,6 +86,7 @@
         }
         h1, h2, h3 { margin-top: 0; color: var(--heading); }
 
+
         /* Page header with dark mode toggle */
         .page-header {
             display: flex;
@@ -89,6 +105,7 @@
         }
         .theme-toggle:hover { background: var(--action-bg-hover); }
 
+
         /* Total Display Box */
         .balance-box {
             text-align: center;
@@ -101,6 +118,7 @@
         .balance-box p { margin: 0 0 5px 0; color: var(--balance-label); font-weight: bold; }
         .balance-box h2 { margin: 0; font-size: 2.5rem; color: var(--accent); }
         .balance-box h2.negative { color: var(--expense); }
+
 
         /* Form Layout */
         .form-group {
@@ -127,6 +145,7 @@
         input[type="text"], input[type="date"] { flex: 2; }
         input[type="number"] { flex: 1; }
 
+
         button {
             color: white;
             border: none;
@@ -138,6 +157,9 @@
         .btn-blue:hover { background: var(--accent-hover); }
         .btn-green { background: #27ae60; width: 100%; }
         .btn-green:hover { background: #219653; }
+        .btn-grey { background: var(--action-bg); color: var(--text); width: 100%; }
+        .btn-grey:hover { background: var(--action-bg-hover); }
+
 
         /* Ledger / List */
         .ledger-item {
@@ -150,6 +172,7 @@
             transition: background 0.2s;
         }
         .ledger-item:last-child { border-bottom: none; }
+
 
         /* Drag and drop visual: the dotted line is drawn on top of the rows
            (not as part of them), so the rows don't move when it appears. */
@@ -166,24 +189,46 @@
         .ledger-item.drop-above::before { top: -1px; }
         .ledger-item.drop-below::after { bottom: -1px; }
 
+
         .drag-handle {
             cursor: grab;
             color: var(--handle);
             padding-right: 15px;
             font-size: 1.2rem;
             user-select: none;
+            flex-shrink: 0;
         }
         .drag-handle:active { cursor: grabbing; }
 
-        .item-left { flex-grow: 1; display: flex; flex-direction: column; }
+
+        /* The text column may shrink and wrap, and is clipped as a last resort,
+           so nothing can ever run underneath the buttons */
+        .item-left {
+            flex: 1 1 0;
+            min-width: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .item-desc, .item-date, .item-left .item-amount { overflow-wrap: anywhere; }
         .item-desc { font-weight: 500; }
         .item-date { font-size: 0.8em; color: var(--muted); margin-top: 2px; }
+        .item-left .item-amount { font-size: 1em; margin-top: 2px; }
 
-        .item-right { text-align: right; margin-right: 15px; min-width: 80px; }
+
+        .item-right {
+            text-align: right;
+            margin-right: 15px;
+            min-width: 80px;
+            max-width: 45%;
+            flex-shrink: 0;
+            overflow-wrap: anywhere;
+        }
         .item-amount { font-weight: bold; font-size: 1.1em; }
         .running-total { font-size: 0.85em; color: var(--faint); margin-top: 2px; }
 
-        .item-actions { display: flex; gap: 5px; }
+
+        .item-actions { display: flex; gap: 5px; flex-shrink: 0; margin-left: 8px; }
         .action-btn {
             background: var(--action-bg);
             color: var(--text);
@@ -193,24 +238,136 @@
         }
         .action-btn:hover { background: var(--action-bg-hover); }
 
+
         .expense { color: var(--expense); }
         .income { color: var(--income); }
 
+
         .empty-state { text-align: center; color: var(--faint); font-style: italic; }
         hr { border: 0; border-top: 1px solid var(--line); margin: 1.5rem 0; }
+
+
+        /* ---------- Upcoming expenses: pop-out panel ---------- */
+        .upcoming-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 320px;
+            max-width: 90vw;
+            height: 100vh;
+            background: var(--card-bg);
+            box-shadow: -4px 0 12px var(--card-shadow);
+            transform: translateX(100%);
+            transition: transform 0.25s ease, background-color 0.2s;
+            z-index: 100;
+        }
+        .upcoming-panel.open { transform: translateX(0); }
+
+
+        /* The tab sticks out of the panel's left edge so it's visible when closed */
+        .panel-tab {
+            position: absolute;
+            left: -42px;
+            top: 120px;
+            width: 42px;
+            padding: 16px 0;
+            background: var(--accent);
+            color: white;
+            border-radius: 10px 0 0 10px;
+            writing-mode: vertical-rl;
+            white-space: nowrap;
+            font-size: 0.95rem;
+            box-shadow: -3px 2px 8px var(--card-shadow);
+        }
+        .panel-tab:hover { background: var(--accent-hover); }
+
+
+        .panel-body {
+            height: 100%;
+            overflow-y: auto;
+            padding: 1.2rem 1rem;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            transition: visibility 0.25s;
+        }
+        .upcoming-panel:not(.open) .panel-body { visibility: hidden; } /* keeps closed panel out of tab order */
+
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.3rem;
+        }
+        .panel-header h3 { margin: 0; }
+        .panel-total { color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem; overflow-wrap: anywhere; }
+        .panel-total strong { color: var(--text); }
+
+
+        .upcoming-panel input, .upcoming-panel select { min-width: 0; }
+        .upcoming-panel .form-group { margin-bottom: 10px; }
+        .upcoming-panel .field-full { flex: 1 1 100%; }
+        .upcoming-panel .field-half { flex: 1 1 100px; }
+
+
+        #upcomingList { flex-grow: 1; min-height: 120px; margin-top: 0.5rem; }
+
+
+        /* Priority sections: each starts with a coloured divider that collapses it */
+        .priority-section { margin-top: 0.8rem; border-radius: 4px; }
+        .priority-section[data-priority="high"]   { --p: var(--p-high); }
+        .priority-section[data-priority="medium"] { --p: var(--p-medium); }
+        .priority-section[data-priority="low"]    { --p: var(--p-low); }
+
+
+        .priority-divider {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            background: transparent;
+            color: var(--p);
+            border: none;
+            border-top: 3px solid var(--p);
+            border-radius: 0;
+            padding: 6px 4px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-align: left;
+        }
+        .priority-divider:hover { background: var(--action-bg); }
+        .divider-label { flex-shrink: 0; }
+        .divider-meta {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--muted);
+            text-transform: none;
+            letter-spacing: 0;
+            font-weight: normal;
+        }
+        /* Highlight shown when dropping into an empty or collapsed section */
+        .priority-section.drop-here { outline: 2px dashed var(--accent); outline-offset: 2px; }
     </style>
 </head>
 <body>
+
 
     <div class="page-header">
         <h1>Money Tracker</h1>
         <button type="button" id="themeToggle" class="theme-toggle">🌙 Dark mode</button>
     </div>
 
+
     <div class="balance-box">
         <p>Current Total</p>
         <h2 id="displayTotal">£0.00</h2>
     </div>
+
 
     <!-- Shown only while there are no items -->
     <div class="card" id="startCard">
@@ -222,6 +379,7 @@
             </div>
         </form>
     </div>
+
 
     <!-- Shown only once there are items -->
     <div class="card" id="formCard">
@@ -244,17 +402,85 @@
         </form>
     </div>
 
-    <div class="card">
+
+    <div class="card" id="ledgerCard">
         <h3>Tracker History</h3>
         <div id="ledgerList">
             <div class="empty-state">No transactions added yet.</div>
         </div>
     </div>
 
+
+    <!-- Upcoming expenses: slides in from the right -->
+    <aside class="upcoming-panel" id="upcomingPanel">
+        <button type="button" class="panel-tab" id="panelTab" aria-expanded="false" aria-controls="upcomingPanel">Upcoming</button>
+
+
+        <div class="panel-body">
+            <div class="panel-header">
+                <h3>Upcoming Expenses</h3>
+                <button type="button" class="action-btn" id="panelClose" title="Close">✖</button>
+            </div>
+            <div class="panel-total">Total: <strong id="upcomingTotal">£0.00</strong></div>
+
+
+            <form id="upcomingForm">
+                <div class="form-group">
+                    <input type="text" id="upDesc" class="field-full" placeholder="What is it for?">
+                </div>
+                <div class="form-group">
+                    <input type="number" id="upAmount" class="field-half" placeholder="Amount (£)" step="0.01" required>
+                    <input type="date" id="upDate" class="field-half">
+                </div>
+                <div class="form-group">
+                    <select id="upPriority" class="field-full" title="Priority">
+                        <option value="high">High priority</option>
+                        <option value="medium" selected>Medium priority</option>
+                        <option value="low">Low priority</option>
+                    </select>
+                </div>
+                <button type="submit" id="upSubmitBtn" class="btn-green">Add to Upcoming</button>
+                <button type="button" id="upCancelBtn" class="btn-grey" hidden style="margin-top:8px;">Cancel edit</button>
+            </form>
+
+
+            <div id="upcomingList"></div>
+        </div>
+    </aside>
+
+
     <script>
+        // Priority levels, in the order they are shown
+        const PRIORITIES = [
+            { key: 'high',   label: 'High' },
+            { key: 'medium', label: 'Medium' },
+            { key: 'low',    label: 'Low' }
+        ];
+        const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
+
+
         // Load existing data from the browser, or start fresh
         let transactions = JSON.parse(localStorage.getItem('myBudgetTracker')) || [];
-        let editingItem = null; // The transaction currently being edited (null when adding a new one)
+        let upcoming = JSON.parse(localStorage.getItem('myBudgetUpcoming')) || [];
+        let collapsed = JSON.parse(localStorage.getItem('myBudgetCollapsed')) || {}; // e.g. { low: true }
+        let editingItem = null;     // The transaction currently being edited (null when adding a new one)
+        let editingUpcoming = null; // The upcoming item currently being edited
+
+
+        // The upcoming list is kept in priority order (high, then medium, then low).
+        // Items saved before priorities existed become medium.
+        function normalizeUpcoming() {
+            upcoming.forEach(t => {
+                if (!(t.priority in PRIORITY_RANK)) t.priority = 'medium';
+            });
+            upcoming.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]); // stable
+        }
+        normalizeUpcoming();
+
+
+        // The two lists are referred to by name: 'main' and 'upcoming'
+        const getList = (name) => name === 'upcoming' ? upcoming : transactions;
+
 
         // Formatting currency: £5.00, or -£5.00 for a negative amount.
         // Rounding to whole pence first stops a tiny rounding error showing as "-£0.00".
@@ -264,8 +490,14 @@
             return (pence < 0 ? "-" : "") + "£" + (Math.abs(pence) / 100).toFixed(2);
         };
 
+
         // Save to browser storage
-        const saveData = () => localStorage.setItem('myBudgetTracker', JSON.stringify(transactions));
+        const saveData = () => {
+            normalizeUpcoming();
+            localStorage.setItem('myBudgetTracker', JSON.stringify(transactions));
+            localStorage.setItem('myBudgetUpcoming', JSON.stringify(upcoming));
+        };
+
 
         // DOM Elements
         const displayTotal = document.getElementById('displayTotal');
@@ -273,10 +505,26 @@
         const startForm = document.getElementById('startForm');
         const formCard = document.getElementById('formCard');
         const transactionForm = document.getElementById('transactionForm');
+        const ledgerCard = document.getElementById('ledgerCard');
         const ledgerList = document.getElementById('ledgerList');
         const submitBtn = document.getElementById('submitBtn');
         const formTitle = document.getElementById('formTitle');
         const themeToggle = document.getElementById('themeToggle');
+
+
+        const upcomingPanel = document.getElementById('upcomingPanel');
+        const panelTab = document.getElementById('panelTab');
+        const panelClose = document.getElementById('panelClose');
+        const upcomingList = document.getElementById('upcomingList');
+        const upcomingTotal = document.getElementById('upcomingTotal');
+        const upcomingForm = document.getElementById('upcomingForm');
+        const upDesc = document.getElementById('upDesc');
+        const upAmount = document.getElementById('upAmount');
+        const upDate = document.getElementById('upDate');
+        const upPriority = document.getElementById('upPriority');
+        const upSubmitBtn = document.getElementById('upSubmitBtn');
+        const upCancelBtn = document.getElementById('upCancelBtn');
+
 
         // Dark mode: remembered in the browser; if never chosen, follows the device setting
         function applyTheme(dark) {
@@ -286,14 +534,41 @@
         const savedTheme = localStorage.getItem('myBudgetTheme');
         applyTheme(savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
 
+
         themeToggle.addEventListener('click', function() {
             const dark = !document.body.classList.contains('dark');
             applyTheme(dark);
             localStorage.setItem('myBudgetTheme', dark ? 'dark' : 'light');
         });
 
+
+        // Upcoming panel open/closed: remembered in the browser
+        function setPanelOpen(open) {
+            upcomingPanel.classList.toggle('open', open);
+            document.documentElement.classList.toggle('panel-open', open);
+            panelTab.setAttribute('aria-expanded', open);
+            localStorage.setItem('myBudgetPanel', open ? 'open' : 'closed');
+        }
+        const isPanelOpen = () => upcomingPanel.classList.contains('open');
+        panelTab.addEventListener('click', () => setPanelOpen(!isPanelOpen()));
+        panelClose.addEventListener('click', () => setPanelOpen(false));
+        setPanelOpen(localStorage.getItem('myBudgetPanel') === 'open');
+
+
+        // Collapse / expand a priority section by clicking its divider
+        upcomingList.addEventListener('click', function(e) {
+            const divider = e.target.closest('.priority-divider');
+            if (!divider) return;
+            const key = divider.dataset.priority;
+            collapsed[key] = !collapsed[key];
+            localStorage.setItem('myBudgetCollapsed', JSON.stringify(collapsed));
+            renderUpcoming();
+        });
+
+
         // Initial Load
         updateUI();
+
 
         // Leave edit mode: clear the form and put it back to "add" mode
         function stopEditing() {
@@ -302,12 +577,22 @@
             formTitle.textContent = 'Add Income or Expense';
             transactionForm.reset();
         }
+        function stopEditingUpcoming() {
+            editingUpcoming = null;
+            upSubmitBtn.textContent = 'Add to Upcoming';
+            upCancelBtn.hidden = true;
+            upcomingForm.reset();
+        }
+        upCancelBtn.addEventListener('click', stopEditingUpcoming);
+
 
         // 1. Handle Setting Starting Balance (only possible while the list is empty)
         startForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
+
             const startAmount = parseFloat(document.getElementById('startAmount').value);
+
 
             transactions = [{
                 desc: "Starting Balance",
@@ -316,38 +601,76 @@
                 date: ""
             }];
 
+
             document.getElementById('startAmount').value = '';
             saveData();
             updateUI();
         });
 
+
         // 2. Handle Adding/Editing Transactions
         transactionForm.addEventListener('submit', function(e) {
             e.preventDefault();
+
 
             const desc = document.getElementById('desc').value;
             const amount = parseFloat(document.getElementById('amount').value);
             const type = document.getElementById('type').value;
             const date = document.getElementById('date').value;
 
+
             // Look up where the item being edited is right now, so it is still
             // found if rows were reordered or deleted since Edit was clicked
             const editPosition = editingItem ? transactions.indexOf(editingItem) : -1;
 
+
             if (editPosition > -1) {
-                // We are updating an existing item
                 transactions[editPosition] = { desc, amount, type, date };
             } else {
-                // We are adding a new item
                 transactions.push({ desc, amount, type, date });
             }
+
 
             stopEditing(); // also clears the form
             saveData();
             updateUI();
         });
 
-        // Edit Function
+
+        // Handle Adding/Editing Upcoming items
+        upcomingForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+
+            const desc = upDesc.value;
+            const amount = parseFloat(upAmount.value);
+            const date = upDate.value;
+            const priority = upPriority.value;
+
+
+            const editPosition = editingUpcoming ? upcoming.indexOf(editingUpcoming) : -1;
+
+
+            if (editPosition > -1) {
+                // keep the type (an income dragged in from the tracker stays income)
+                upcoming[editPosition] = { desc, amount, type: upcoming[editPosition].type, priority, date };
+            } else {
+                upcoming.push({ desc, amount, type: 'expense', priority, date });
+            }
+
+
+            // A new item made visible in a collapsed section would seem to vanish
+            collapsed[priority] = false;
+            localStorage.setItem('myBudgetCollapsed', JSON.stringify(collapsed));
+
+
+            stopEditingUpcoming();
+            saveData();
+            updateUI();
+        });
+
+
+        // Edit Functions
         window.editItem = function(index) {
             const t = transactions[index];
             document.getElementById('desc').value = t.desc || '';
@@ -355,17 +678,35 @@
             document.getElementById('type').value = t.type;
             document.getElementById('date').value = t.date || '';
 
+
             editingItem = t;
             submitBtn.textContent = 'Update Transaction';
             formTitle.textContent = 'Editing Transaction';
             formCard.scrollIntoView({ behavior: 'smooth' });
         };
 
-        // Delete Function
+
+        window.editUpcoming = function(index) {
+            const t = upcoming[index];
+            upDesc.value = t.desc || '';
+            upAmount.value = t.amount;
+            upDate.value = t.date || '';
+            upPriority.value = t.priority;
+
+
+            editingUpcoming = t;
+            upSubmitBtn.textContent = 'Update Upcoming';
+            upCancelBtn.hidden = false;
+            upDesc.focus();
+        };
+
+
+        // Delete Functions
         window.deleteItem = function(index) {
             if (confirm("Delete this item?")) {
                 // Deleting the row that is being edited cancels the edit
                 if (transactions[index] === editingItem) stopEditing();
+
 
                 transactions.splice(index, 1);
                 saveData();
@@ -373,11 +714,28 @@
             }
         };
 
+
+        window.deleteUpcoming = function(index) {
+            if (confirm("Delete this item?")) {
+                if (upcoming[index] === editingUpcoming) stopEditingUpcoming();
+
+
+                upcoming.splice(index, 1);
+                saveData();
+                updateUI();
+            }
+        };
+
+
         // --- Drag and Drop Functions ---
+        // Rows can be dragged within a list, or between the tracker and the upcoming panel.
         // A "slot" is a gap between rows: 0 = above the first row, 1 = above the
         // second row, ... and one past the last row = at the bottom of the list.
-        let dragStartIndex = null; // null means no row is being dragged
-        let dropSlot = null;       // the slot the dotted line is currently shown at (null = none)
+        // In the upcoming list the target also records which priority section it is in,
+        // because the gap between two sections belongs to both of them.
+        let dragSource = null; // { list, index, priority } of the row being dragged (null = nothing)
+        let dropTarget = null; // { list, slot, priority } where the dotted line is shown (null = none)
+
 
         // Top half of a row = the slot above it, bottom half = the slot below it
         function slotUnderPointer(row, e) {
@@ -386,76 +744,303 @@
             return e.clientY < rect.top + rect.height / 2 ? index : index + 1;
         }
 
-        // The slots directly above and below the dragged row would leave it
-        // exactly where it started, so neither of those counts as a move.
-        function wouldMove(slot) {
-            return dragStartIndex !== null &&
-                   slot !== dragStartIndex &&
-                   slot !== dragStartIndex + 1;
+
+        // The slot at the bottom of a priority section (the list is kept in priority order)
+        function sectionEnd(priority) {
+            return upcoming.filter(t => PRIORITY_RANK[t.priority] <= PRIORITY_RANK[priority]).length;
         }
 
-        // Draw the dotted line at one slot (pass null to draw it nowhere)
-        function setDropLine(slot) {
-            dropSlot = slot;
-            const rows = ledgerList.querySelectorAll('.ledger-item');
-            rows.forEach((row, i) => {
-                row.classList.toggle('drop-above', slot === i);
-                row.classList.toggle('drop-below', slot === rows.length && i === rows.length - 1);
-            });
+
+        // Dropping a row directly above or below itself would leave it where it
+        // started, so that doesn't count as a move. Another list or another
+        // priority section is always a move.
+        function wouldMove(list, slot, priority) {
+            if (!dragSource) return false;
+            if (list !== dragSource.list) return true;
+            if (list === 'upcoming' && priority !== dragSource.priority) return true;
+            return slot !== dragSource.index && slot !== dragSource.index + 1;
         }
+
+
+        // The tracker can't receive items while it is empty (it needs a starting balance first)
+        function canDrop(list) {
+            return list !== 'main' || transactions.length > 0;
+        }
+
+
+        // Draw the dotted line at one slot of one list (pass null to draw it nowhere)
+        function setDropLine(target) {
+            dropTarget = target;
+            document.querySelectorAll('.ledger-item').forEach(row => row.classList.remove('drop-above', 'drop-below'));
+            document.querySelectorAll('.priority-section.drop-here').forEach(s => s.classList.remove('drop-here'));
+            if (!target) return;
+
+
+            const rows = [...document.querySelectorAll(`.ledger-item[data-list="${target.list}"]`)];
+            const rowAt = rows.find(r => +r.dataset.index === target.slot);        // row the line sits above
+            const rowBefore = rows.find(r => +r.dataset.index === target.slot - 1); // row the line sits below
+
+
+            if (target.list === 'upcoming') {
+                if (rowAt && rowAt.dataset.priority === target.priority) rowAt.classList.add('drop-above');
+                else if (rowBefore && rowBefore.dataset.priority === target.priority) rowBefore.classList.add('drop-below');
+                else {
+                    // Empty or collapsed section: outline the whole section instead
+                    const section = document.querySelector(`.priority-section[data-priority="${target.priority}"]`);
+                    if (section) section.classList.add('drop-here');
+                }
+            } else {
+                if (rowAt) rowAt.classList.add('drop-above');
+                else if (rowBefore) rowBefore.classList.add('drop-below');
+            }
+        }
+
 
         function dragStart(e) {
-            dragStartIndex = +this.dataset.index;
+            dragSource = {
+                list: this.dataset.list,
+                index: +this.dataset.index,
+                priority: this.dataset.priority || null
+            };
             e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', ''); // Firefox won't start a drag without this
+            // Make sure the panel is open so there is somewhere to drop
+            if (!isPanelOpen()) setTimeout(() => setPanelOpen(true), 0);
         }
 
-        // Runs for both dragenter and dragover
-        function dragOver(e) {
-            if (dragStartIndex === null) return; // something other than one of our rows is being dragged
-            e.preventDefault();
-            const slot = slotUnderPointer(this, e);
-            setDropLine(wouldMove(slot) ? slot : null);
-        }
 
-        function dragLeave(e) {
-            // This fires whenever the pointer moves between elements, including the
-            // text and buttons inside rows. Only clear the line once it has left the list.
-            const nowOver = e.relatedTarget || document.elementFromPoint(e.clientX, e.clientY);
-            if (nowOver && ledgerList.contains(nowOver)) return;
+        // Tidy up when a drag finishes or is cancelled
+        function dragEnd() {
+            dragSource = null;
             setDropLine(null);
         }
 
-        function dragDrop(e) {
-            e.stopPropagation();
-            const from = dragStartIndex;
-            const slot = dropSlot; // land exactly where the line was showing
-            dragEnd();
-            if (from === null || slot === null) return; // dropped where it started - nothing to do
 
-            const itemToMove = transactions.splice(from, 1)[0];
-            // Removing the row shifts every slot below it up by one
-            const insertIndex = slot > from ? slot - 1 : slot;
-            transactions.splice(insertIndex, 0, itemToMove);
+        // The tracker card and the upcoming panel are both drop zones.
+        // Over a row: drop above/below it. Over a section but not a row: drop at the
+        // end of that section. Elsewhere in the panel: end of the medium section.
+        function zoneDragOver(listName, e) {
+            if (!dragSource) return; // not one of our rows
+            if (!canDrop(listName)) { setDropLine(null); return; }
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+
+            const row = e.target.closest && e.target.closest('.ledger-item');
+            let slot, priority = null;
+
+
+            if (listName === 'upcoming') {
+                const section = e.target.closest && e.target.closest('.priority-section');
+                priority = row ? row.dataset.priority : (section ? section.dataset.priority : 'medium');
+                slot = row ? slotUnderPointer(row, e) : sectionEnd(priority);
+            } else {
+                slot = row ? slotUnderPointer(row, e) : transactions.length;
+            }
+
+
+            setDropLine(wouldMove(listName, slot, priority) ? { list: listName, slot, priority } : null);
+        }
+
+
+        function zoneDragLeave(zone, e) {
+            // Fires whenever the pointer moves between elements inside the zone too,
+            // so only clear the line once the pointer has really left it.
+            const nowOver = e.relatedTarget || document.elementFromPoint(e.clientX, e.clientY);
+            if (nowOver && zone.contains(nowOver)) return;
+            setDropLine(null);
+        }
+
+
+        function zoneDrop(listName, e) {
+            if (!dragSource) return;
+            e.preventDefault();
+            const from = dragSource;
+            const to = dropTarget; // land exactly where the line was showing
+            dragEnd();
+            if (!to || to.list !== listName) return; // dropped where it started - nothing to do
+
+
+            const source = getList(from.list);
+            const dest = getList(to.list);
+            const item = source.splice(from.index, 1)[0];
+
+
+            // Removing the row shifts every later slot in the same list up by one
+            const insertIndex = (from.list === to.list && to.slot > from.index) ? to.slot - 1 : to.slot;
+
+
+            // Upcoming items take the priority of the section they land in;
+            // items going back to the tracker don't have one
+            if (to.list === 'upcoming') item.priority = to.priority;
+            else delete item.priority;
+
+
+            dest.splice(insertIndex, 0, item);
+
+
+            // A row that moved to the other list can no longer be edited in its old form
+            if (from.list !== to.list) {
+                if (item === editingItem) stopEditing();
+                if (item === editingUpcoming) stopEditingUpcoming();
+            } else if (item === editingUpcoming) {
+                upPriority.value = item.priority; // keep the form in step if it changed section
+            }
+
 
             saveData();
             updateUI();
         }
 
-        // Tidy up when a drag finishes or is cancelled
-        function dragEnd() {
-            dragStartIndex = null;
-            setDropLine(null);
+
+        [['main', ledgerCard], ['upcoming', upcomingPanel]].forEach(([name, zone]) => {
+            zone.addEventListener('dragenter', e => zoneDragOver(name, e));
+            zone.addEventListener('dragover', e => zoneDragOver(name, e));
+            zone.addEventListener('dragleave', e => zoneDragLeave(zone, e));
+            zone.addEventListener('drop', e => zoneDrop(name, e));
+        });
+
+
+        // --- Building rows ---
+        function escapeHtml(text) {
+            return String(text).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
         }
+
+
+        // runningTotal is only passed for rows in the main tracker
+        function createRow(t, index, listName, runningTotal) {
+            const isMain = listName === 'main';
+
+
+            // Format date only if one was entered (read straight from the text so
+            // time zones can't shift it by a day)
+            let dateString = '';
+            if (t.date) {
+                const [, month, day] = t.date.split('-');
+                dateString = `${day}/${month}`;
+            }
+
+
+            // Income normally shows as a plus and an expense as a minus. A negative
+            // amount (e.g. an overdrawn starting balance) flips that.
+            const isMinus = t.type === 'income' ? t.amount < 0 : t.amount >= 0;
+            const sign = isMinus ? '-' : '+';
+            const colorClass = isMinus ? 'expense' : 'income';
+            const displayName = t.desc ? escapeHtml(t.desc) : '<em>No reference</em>';
+            const amountText = formatMoney(Math.abs(t.amount));
+
+
+            const editFn = isMain ? 'editItem' : 'editUpcoming';
+            const deleteFn = isMain ? 'deleteItem' : 'deleteUpcoming';
+
+
+            const div = document.createElement('div');
+            div.className = 'ledger-item';
+            div.draggable = true;
+            div.dataset.index = index;
+            div.dataset.list = listName;
+            if (!isMain) div.dataset.priority = t.priority;
+
+
+            // Tracker rows: amount (with sign) and running total on the right.
+            // Upcoming rows: plain amount (no sign) underneath the reference.
+            const middle = isMain ? `
+                <div class="item-left">
+                    <span class="item-desc">${displayName}</span>
+                    <span class="item-date">${dateString}</span>
+                </div>
+                <div class="item-right">
+                    <div class="item-amount ${colorClass}">${sign}${amountText}</div>
+                    <div class="running-total">= ${formatMoney(runningTotal)}</div>
+                </div>` : `
+                <div class="item-left">
+                    <span class="item-desc">${displayName}</span>
+                    <span class="item-amount ${colorClass}">${amountText}</span>
+                    ${dateString ? `<span class="item-date">${dateString}</span>` : ''}
+                </div>`;
+
+
+            div.innerHTML = `
+                <div class="drag-handle" title="Drag to reorder or move to the other list">☰</div>
+                ${middle}
+                <div class="item-actions">
+                    <button onclick="${editFn}(${index})" class="action-btn" title="Edit">✎</button>
+                    <button onclick="${deleteFn}(${index})" class="action-btn" title="Delete">✖</button>
+                </div>
+            `;
+
+
+            div.addEventListener('dragstart', dragStart);
+            div.addEventListener('dragend', dragEnd);
+            return div;
+        }
+
+
+        function renderUpcoming() {
+            upcomingList.innerHTML = '';
+            let total = 0;
+
+
+            PRIORITIES.forEach(p => {
+                const items = [];
+                upcoming.forEach((t, i) => { if (t.priority === p.key) items.push({ t, i }); });
+
+
+                // Total still to pay out in this section
+                const sectionTotal = items.reduce((sum, x) => sum + (x.t.type === 'income' ? -x.t.amount : x.t.amount), 0);
+                total += sectionTotal;
+
+
+                const isCollapsed = !!collapsed[p.key];
+                const section = document.createElement('div');
+                section.className = 'priority-section';
+                section.dataset.priority = p.key;
+
+
+                section.innerHTML = `
+                    <button type="button" class="priority-divider" data-priority="${p.key}"
+                            aria-expanded="${!isCollapsed}" title="${isCollapsed ? 'Expand' : 'Collapse'} ${p.label} priority">
+                        <span class="divider-label">${isCollapsed ? '▸' : '▾'} ${p.label}</span>
+                        <span class="divider-meta">${items.length} ${items.length === 1 ? 'item' : 'items'} · ${formatMoney(sectionTotal)}</span>
+                    </button>
+                `;
+
+
+                if (!isCollapsed) {
+                    items.forEach(x => section.appendChild(createRow(x.t, x.i, 'upcoming')));
+                }
+                upcomingList.appendChild(section);
+            });
+
+
+            if (upcoming.length === 0) {
+                const hint = document.createElement('div');
+                hint.className = 'empty-state';
+                hint.style.marginTop = '1rem';
+                hint.innerHTML = 'Nothing upcoming yet.<br>Add something above, or drag items here from the tracker.';
+                upcomingList.appendChild(hint);
+            }
+
+
+            upcomingTotal.textContent = formatMoney(total);
+            panelTab.textContent = upcoming.length ? `Upcoming (${upcoming.length})` : 'Upcoming';
+        }
+
 
         // 3. Update the Screen
         function updateUI() {
+            renderUpcoming();
             ledgerList.innerHTML = '';
             let runningTotal = 0;
+
 
             // Show "Set Current Amount" until there are items, then swap to "Add Income or Expense"
             const hasItems = transactions.length > 0;
             startCard.hidden = hasItems;
             formCard.hidden = !hasItems;
+
 
             if (!hasItems) {
                 ledgerList.innerHTML = '<div class="empty-state">No transactions added yet.</div>';
@@ -464,56 +1049,16 @@
                 return;
             }
 
+
             // Build the list
             transactions.forEach((t, index) => {
                 if (t.type === 'income') runningTotal += t.amount;
                 else runningTotal -= t.amount;
 
-                // Format date only if one was entered
-                let dateString = '';
-                if (t.date) {
-                    const dateObj = new Date(t.date);
-                    dateString = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-                }
 
-                // Income normally shows as a plus and an expense as a minus. A negative
-                // amount (e.g. an overdrawn starting balance) flips that.
-                const isMinus = t.type === 'income' ? t.amount < 0 : t.amount >= 0;
-                const sign = isMinus ? '-' : '+';
-                const colorClass = isMinus ? 'expense' : 'income';
-                const displayName = t.desc ? t.desc : '<em>No reference</em>';
-
-                const div = document.createElement('div');
-                div.className = 'ledger-item';
-                div.draggable = true;
-                div.dataset.index = index;
-
-                div.innerHTML = `
-                    <div class="drag-handle" title="Drag to reorder">☰</div>
-                    <div class="item-left">
-                        <span class="item-desc">${displayName}</span>
-                        <span class="item-date">${dateString}</span>
-                    </div>
-                    <div class="item-right">
-                        <div class="item-amount ${colorClass}">${sign}${formatMoney(Math.abs(t.amount))}</div>
-                        <div class="running-total">= ${formatMoney(runningTotal)}</div>
-                    </div>
-                    <div class="item-actions">
-                        <button onclick="editItem(${index})" class="action-btn" title="Edit">✎</button>
-                        <button onclick="deleteItem(${index})" class="action-btn" title="Delete">✖</button>
-                    </div>
-                `;
-
-                // Add drag and drop event listeners
-                div.addEventListener('dragstart', dragStart);
-                div.addEventListener('dragenter', dragOver);
-                div.addEventListener('dragover', dragOver);
-                div.addEventListener('dragleave', dragLeave);
-                div.addEventListener('drop', dragDrop);
-                div.addEventListener('dragend', dragEnd);
-
-                ledgerList.appendChild(div);
+                ledgerList.appendChild(createRow(t, index, 'main', runningTotal));
             });
+
 
             // Update big number
             displayTotal.textContent = formatMoney(runningTotal);
